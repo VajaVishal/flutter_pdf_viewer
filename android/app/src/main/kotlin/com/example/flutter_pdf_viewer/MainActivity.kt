@@ -1,48 +1,51 @@
 package com.example.flutter_pdf_viewer
 
-import android.content.Intent
 import android.app.Activity
+import android.content.Intent
+import android.net.Uri
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
 
-    private val CHANNEL = "file_picker_channel"
-    private val PICK_PDF_REQUEST = 1001
-    private var pendingResult: MethodChannel.Result? = null
+    private val CHANNEL = "file_picker_native"
+    private var resultCallback: MethodChannel.Result? = null
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        // 🔹 1. Register PDF view factory
-        flutterEngine.platformViewsController
-            .registry
-            .registerViewFactory("pdf_view", PdfViewFactory(this))
-
-        // 🔹 2. Register file picker channel
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
             .setMethodCallHandler { call, result ->
                 if (call.method == "pickPdf") {
-                    pendingResult = result
-                    val intent = Intent(Intent.ACTION_GET_CONTENT)
-                    intent.type = "application/pdf"
-                    intent.addCategory(Intent.CATEGORY_OPENABLE)
-                    startActivityForResult(Intent.createChooser(intent, "Select PDF"), PICK_PDF_REQUEST)
-                } else {
-                    result.notImplemented()
-                }
+                    pickPdf(result)
+                } else result.notImplemented()
             }
+
+        flutterEngine
+            .platformViewsController
+            .registry
+            .registerViewFactory("pdf_view", PdfViewFactory(this))
     }
 
-    @Deprecated("Deprecated in Java")
+    private fun pickPdf(result: MethodChannel.Result) {
+        resultCallback = result
+
+        val intent = Intent(Intent.ACTION_GET_CONTENT)
+        intent.type = "application/pdf"
+        intent.addCategory(Intent.CATEGORY_OPENABLE)
+
+        startActivityForResult(intent, 1001)
+    }
+
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode == PICK_PDF_REQUEST && resultCode == Activity.RESULT_OK) {
-            pendingResult?.success(data?.data.toString())
-        } else if (requestCode == PICK_PDF_REQUEST) {
-            pendingResult?.error("CANCELLED", "User cancelled file picker", null)
-        }
-        pendingResult = null
+
+        if (requestCode == 1001 && resultCode == Activity.RESULT_OK)
+            resultCallback?.success(data?.data?.toString())
+        else
+            resultCallback?.success(null)
+
+        resultCallback = null
     }
 }
